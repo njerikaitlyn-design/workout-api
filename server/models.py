@@ -4,6 +4,7 @@ from sqlalchemy.ext.associationproxy import association_proxy
 
 db = SQLAlchemy()
 
+
 class Exercise(db.Model):
     __tablename__ = 'exercises'
 
@@ -11,11 +12,27 @@ class Exercise(db.Model):
     name = db.Column(db.String, nullable=False, unique=True)
     category = db.Column(db.String, nullable=False)
     equipment_needed = db.Column(db.Boolean, nullable=False, default=False)
-    workout_exercises = db.relationship('WorkoutExercise', back_populates='exercise', cascade='all, delete-orphan')
+
+    workout_exercises = db.relationship(
+        'WorkoutExercise', back_populates='exercise', cascade='all, delete-orphan'
+    )
     workouts = association_proxy('workout_exercises', 'workout')
+
+    @validates('name')
+    def validate_name(self, key, value):
+        if not value or not value.strip():
+            raise ValueError('Exercise name cannot be empty')
+        return value.strip()
+
+    @validates('category')
+    def validate_category(self, key, value):
+        if not value or not value.strip():
+            raise ValueError('Category cannot be empty')
+        return value.strip()
 
     def __repr__(self):
         return f'<Exercise {self.id}: {self.name}>'
+
 
 class Workout(db.Model):
     __tablename__ = 'workouts'
@@ -24,14 +41,25 @@ class Workout(db.Model):
     date = db.Column(db.Date, nullable=False)
     duration_minutes = db.Column(db.Integer, nullable=False)
     notes = db.Column(db.Text)
+
     __table_args__ = (
         db.CheckConstraint('duration_minutes > 0', name='check_duration_positive'),
     )
-    workout_exercises = db.relationship('WorkoutExercise', back_populates='workout', cascade='all, delete-orphan')
+
+    workout_exercises = db.relationship(
+        'WorkoutExercise', back_populates='workout', cascade='all, delete-orphan'
+    )
     exercises = association_proxy('workout_exercises', 'exercise')
 
+    @validates('duration_minutes')
+    def validate_duration(self, key, value):
+        if value is None or value <= 0:
+            raise ValueError('Duration must be greater than 0')
+        return value
+
     def __repr__(self):
-        return f'<Workout {self.id}: {self.date}>'    
+        return f'<Workout {self.id}: {self.date}>'
+
 
 class WorkoutExercise(db.Model):
     __tablename__ = 'workout_exercises'
@@ -42,12 +70,20 @@ class WorkoutExercise(db.Model):
     reps = db.Column(db.Integer)
     sets = db.Column(db.Integer)
     duration_seconds = db.Column(db.Integer)
+
     __table_args__ = (
         db.CheckConstraint('reps > 0', name='check_reps_positive'),
         db.CheckConstraint('sets > 0', name='check_sets_positive'),
     )
+
     workout = db.relationship('Workout', back_populates='workout_exercises')
     exercise = db.relationship('Exercise', back_populates='workout_exercises')
+
+    @validates('reps', 'sets', 'duration_seconds')
+    def validate_positive(self, key, value):
+        if value is not None and value <= 0:
+            raise ValueError(f'{key} must be greater than 0')
+        return value
 
     def __repr__(self):
         return f'<WorkoutExercise {self.id}: workout {self.workout_id}, exercise {self.exercise_id}>'
